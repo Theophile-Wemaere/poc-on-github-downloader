@@ -82,3 +82,13 @@ Path on disk : /run/media/HDD/PoCs/data/2017/CVE-2017-0144/CVE-2017-0144_kimocod
 
 < SNIP >
 ```
+
+## Automating the download
+
+Using crontab, it's possible to automate the download of new PoCs (let's say every 6h) :
+```crontab
+0 */6 * * * python3 /opt/downloader/main.py -u -p /run/media/HDDS/PocS/
+```
+
+(Use [crontab.guru](https://crontab.guru/) to set another frequencie)
+([Cool guides to learn how to use crontab](https://cronitor.io/guides/cron-jobs))
