@@ -4,10 +4,10 @@ import shlex
 import shutil
 import sys
 import sqlite3
-import requests
 import json
 import argparse
 import threading
+import requests
 from alive_progress import alive_bar
 
 GIT_URL = "https://github.com/nomi-sec/PoC-in-GitHub"
@@ -92,6 +92,17 @@ def parse_folders()-> dict:
 
     return data
 
+def get_poc_from_db(cveid: str)-> list:
+    """
+    return author, name of the repo, description and url for all PoC of a CVE
+    """
+
+    db = sqlite3.connect(DATABASE)
+    cursor = db.cursor()
+    cursor.execute("SELECT * FROM pocs WHERE cveid=?",(cveid,))
+    rows = cursor.fetchall()
+    return rows
+
 def init_db():
     """
     initialize sqlite database
@@ -111,6 +122,30 @@ def init_db():
     )""")
     db.commit()
     db.close()
+
+def search_cve():
+    """
+    search for a CVE ID
+    print all PoC for this CVE and path to the ZIP file with PoC
+    """
+
+    if not os.path.exists(BASE_PATH+"data/"):
+        print(f"No data/ folder found in current path {BASE_PATH}")
+        print("use -b to build project or specify path to poc base folder with -p")
+        sys.exit(1)
+
+    cveid = input("\nEnter the CVE ID you want to search for (CVE-XXXX-XXXXXX) : ").upper()
+    data = get_poc_from_db(cveid)
+    if len(data) == 0:
+        print(f"CVE {cveid} not found :/\n")
+    else:
+        print(f"\nFound {len(data)} PoCs :\n")
+        for row in data:
+            year,author,name,description,url = row[0],row[2],row[3],row[4],row[5]
+            print(f"{name}, by {author}")
+            print(f"Github link : {url}")
+            print(f"About: {description}" if description != "" else '')
+            print(f"Path on disk : {BASE_PATH}data/{year}/{cveid}/{cveid}_{author}_{name}.zip\n")
 
 def clone_pocs_from_year(pocs: list, bar):
     """
@@ -153,7 +188,8 @@ def update_pocs(from_init=False):
     global THREADS, RUN_EVENT
 
     if not os.path.exists(BASE_PATH + FOLDER_NAME):
-        print(f"No {FOLDER_NAME} folder found in path {BASE_PATH},\nuse -b to build project or specify path to poc base folder with -p")
+        print(f"No {FOLDER_NAME} folder found in path {BASE_PATH},")
+        print("use -b to build project or specify path to poc base folder with -p")
         sys.exit(1)
 
     if not from_init:
@@ -196,9 +232,6 @@ def init():
     initialize project by cloning it and downloading all PoC
     """
 
-    # init sqlite database
-    init_db()
-
     # remove folder if it exists
     if os.path.exists(BASE_PATH+FOLDER_NAME):
         shutil.rmtree(BASE_PATH+FOLDER_NAME)
@@ -221,9 +254,12 @@ def main():
 
     global BASE_PATH
 
+    # init sqlite3 database
+    init_db()
+
     show_help= True
 
-    parser = argparse.ArgumentParser(description="Project management utility")
+    parser = argparse.ArgumentParser(description="CVE PoC downloader")
 
     parser.add_argument('-b', dest="build", action='store_true', help='Build the project')
     parser.add_argument('-u', dest="update", action='store_true', help='Update PoCbase')
@@ -242,10 +278,12 @@ def main():
     if args.build:
         show_help=False
         init()
-
-    if args.update:
+    elif args.update:
         show_help=False
         update_pocs()
+    elif args.search:
+        show_help=False
+        search_cve()
 
     if show_help:
         parser.print_help()
